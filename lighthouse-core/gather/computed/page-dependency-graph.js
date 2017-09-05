@@ -88,10 +88,7 @@ class PageDependencyGraphArtifact extends ComputedArtifact {
    */
   static printGraph(rootNode, widthInCharacters = 100) {
     function padRight(str, target, padChar = ' ') {
-      while (str.length < target) {
-        str += padChar;
-      }
-      return str;
+      return str + padChar.repeat(Math.max(target - str.length, 0));
     }
 
     const nodes = [];

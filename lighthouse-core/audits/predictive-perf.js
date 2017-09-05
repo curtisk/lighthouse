@@ -32,13 +32,13 @@ class PredictivePerf extends Audit {
   }
 
   /**
-   * @param {!Node} graph
+   * @param {!Node} dependencyGraph
    * @param {!TraceOfTabArtifact} traceOfTab
    * @return {!Node}
    */
-  static getOptimisticFMPGraph(graph, traceOfTab) {
+  static getOptimisticFMPGraph(dependencyGraph, traceOfTab) {
     const fmp = traceOfTab.timestamps.firstMeaningfulPaint;
-    return graph.cloneWithRelationships(node => {
+    return dependencyGraph.cloneWithRelationships(node => {
       if (node.endTime > fmp) return false;
       if (node.type !== Node.TYPES.NETWORK) return true;
       return node.record.priority() === 'VeryHigh'; // proxy for render-blocking
@@ -46,23 +46,23 @@ class PredictivePerf extends Audit {
   }
 
   /**
-   * @param {!Node} graph
+   * @param {!Node} dependencyGraph
    * @param {!TraceOfTabArtifact} traceOfTab
    * @return {!Node}
    */
-  static getPessimisticFMPGraph(graph, traceOfTab) {
+  static getPessimisticFMPGraph(dependencyGraph, traceOfTab) {
     const fmp = traceOfTab.timestamps.firstMeaningfulPaint;
-    return graph.cloneWithRelationships(node => {
+    return dependencyGraph.cloneWithRelationships(node => {
       return node.endTime <= fmp;
     });
   }
 
   /**
-   * @param {!Node} graph
+   * @param {!Node} dependencyGraph
    * @return {!Node}
    */
-  static getOptimisticTTCIGraph(graph) {
-    return graph.cloneWithRelationships(node => {
+  static getOptimisticTTCIGraph(dependencyGraph) {
+    return dependencyGraph.cloneWithRelationships(node => {
       return node.record._resourceType && node.record._resourceType._name === 'script' ||
           node.record.priority() === 'High' ||
           node.record.priority() === 'VeryHigh';
@@ -70,11 +70,11 @@ class PredictivePerf extends Audit {
   }
 
   /**
-   * @param {!Node} graph
+   * @param {!Node} dependencyGraph
    * @return {!Node}
    */
-  static getPessimisticTTCIGraph(graph) {
-    return graph;
+  static getPessimisticTTCIGraph(dependencyGraph) {
+    return dependencyGraph;
   }
 
   /**
@@ -102,17 +102,17 @@ class PredictivePerf extends Audit {
         sum += values[key];
       });
 
-      const rawValue = sum / Object.keys(values).length;
+      const meanDuration = sum / Object.keys(values).length;
       const score = Audit.computeLogNormalScore(
-        rawValue,
+        meanDuration,
         SCORING_POINT_OF_DIMINISHING_RETURNS,
         SCORING_MEDIAN
       );
 
       return {
         score,
-        rawValue,
-        displayValue: Util.formatMilliseconds(rawValue),
+        rawValue: meanDuration,
+        displayValue: Util.formatMilliseconds(meanDuration),
         extendedInfo: {value: values},
       };
     });

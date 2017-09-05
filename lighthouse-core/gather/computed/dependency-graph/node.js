@@ -38,7 +38,7 @@ class Node {
    * @return {string}
    */
   get type() {
-    return Node.TYPES.UNKNOWN;
+    throw new Error('Unimplemented');
   }
 
   /**

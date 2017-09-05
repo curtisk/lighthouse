@@ -57,6 +57,7 @@ class Estimator {
   }
 
   /**
+   * Computes the time to first byte of a network record. Returns Infinity if not available.
    * @param {!WebInspector.NetworkRequest} record
    * @return {number}
    */
@@ -65,6 +66,9 @@ class Estimator {
     return (timing && timing.receiveHeadersEnd - timing.sendEnd) || Infinity;
   }
 
+  /**
+   * Initializes this._networkRecords with the array of network records from the graph.
+   */
   _initializeNetworkRecords() {
     this._networkRecords = [];
 
@@ -75,6 +79,9 @@ class Estimator {
     });
   }
 
+  /**
+   * Initializes this._connections with the map of available TcpConnections by connectionId.
+   */
   _initializeNetworkConnections() {
     const connections = new Map();
     const recordsByConnection = groupBy(
@@ -91,10 +98,7 @@ class Estimator {
       // Even though TTFB is greater than server response time, the RTT is underaccounted for by
       // not varying per-server and so the difference roughly evens out.
       // TODO(patrickhulce): investigate a way to identify per-server RTT
-      let estimatedResponseTime = records.reduce(
-        (min, record) => Math.min(min, Estimator.getTTFB(record)),
-        Infinity
-      );
+      let estimatedResponseTime = Math.min(...records.map(Estimator.getTTFB));
 
       // If we couldn't find a TTFB for the requests, use the fallback TTFB instead.
       if (!Number.isFinite(estimatedResponseTime)) {
@@ -115,10 +119,13 @@ class Estimator {
     return connections;
   }
 
+  /**
+   * Initializes the various state data structures such as _nodesInQueue and _nodesCompleted.
+   */
   _initializeAuxiliaryData() {
     this._nodeTiming = new Map();
     this._nodesCompleted = new Set();
-    this._nodesInProcess = new Set();
+    this._nodesInProgress = new Set();
     this._nodesInQueue = new Set(); // TODO: replace this with priority queue
     this._connectionsInUse = new Set();
   }
@@ -146,14 +153,14 @@ class Estimator {
     const connection = this._connections.get(node.record.connectionId);
 
     if (
-      this._nodesInProcess.size >= this._maximumConcurrentRequests ||
+      this._nodesInProgress.size >= this._maximumConcurrentRequests ||
       this._connectionsInUse.has(connection)
     ) {
       return;
     }
 
     this._nodesInQueue.delete(node);
-    this._nodesInProcess.add(node);
+    this._nodesInProgress.add(node);
     this._nodeTiming.set(node, {
       startTime: totalElapsedTime,
       timeElapsed: 0,
@@ -164,13 +171,18 @@ class Estimator {
     this._connectionsInUse.add(connection);
   }
 
+  /**
+   * Updates each connection in use with the available throughput based on the number of network requests
+   * currently in flight.
+   */
   _updateNetworkCapacity() {
     for (const connection of this._connectionsInUse) {
-      connection.setThroughput(this._throughput / this._nodesInProcess.size);
+      connection.setThroughput(this._throughput / this._nodesInProgress.size);
     }
   }
 
   /**
+   * Estimates the number of milliseconds remaining given current condidtions before the node is complete.
    * @param {!Node} node
    * @return {number}
    */
@@ -190,11 +202,12 @@ class Estimator {
   }
 
   /**
+   * Computes and returns the minimum estimated completion time of the nodes currently in progress.
    * @return {number}
    */
   _findNextNodeCompletionTime() {
     let minimumTime = Infinity;
-    for (const node of this._nodesInProcess) {
+    for (const node of this._nodesInProgress) {
       minimumTime = Math.min(minimumTime, this._estimateTimeRemaining(node));
     }
 
@@ -202,6 +215,7 @@ class Estimator {
   }
 
   /**
+   * Given a time period, computes the progress toward completion that the node made durin that time.
    * @param {!Node} node
    * @param {number} timePeriodLength
    * @param {number} totalElapsedTime
@@ -226,7 +240,7 @@ class Estimator {
       this._connectionsInUse.delete(connection);
 
       this._nodesCompleted.add(node);
-      this._nodesInProcess.delete(node);
+      this._nodesInProgress.delete(node);
 
       for (const dependent of node.getDependents()) {
         this._enqueueNodeIfPossible(dependent);
@@ -239,6 +253,7 @@ class Estimator {
   }
 
   /**
+   * Estimates the time taken to process all of the graph's nodes.
    * @return {number}
    */
   estimate() {
@@ -248,17 +263,17 @@ class Estimator {
     this._initializeAuxiliaryData();
 
     const nodesInQueue = this._nodesInQueue;
-    const nodesInProcess = this._nodesInProcess;
+    const nodesInProgress = this._nodesInProgress;
 
     // add root node to queue
     nodesInQueue.add(this._graph.getRootNode());
 
     let depth = 0;
     let totalElapsedTime = 0;
-    while (nodesInQueue.size || nodesInProcess.size) {
+    while (nodesInQueue.size || nodesInProgress.size) {
       depth++;
 
-      // move all possible queued nodes to in process
+      // move all possible queued nodes to in progress
       for (const node of nodesInQueue) {
         this._startNodeIfPossible(node, totalElapsedTime);
       }
@@ -271,7 +286,7 @@ class Estimator {
       totalElapsedTime += minimumTime;
 
       // update how far each node will progress until that point
-      for (const node of nodesInProcess) {
+      for (const node of nodesInProgress) {
         this._updateProgressMadeInTimePeriod(
           node,
           minimumTime,
