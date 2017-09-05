@@ -12,15 +12,15 @@ class TcpConnection {
   /**
    * @param {number} rtt
    * @param {number} throughput
-   * @param {number=} responseTime
+   * @param {number=} serverLatency
    * @param {boolean=} ssl
    */
-  constructor(rtt, throughput, responseTime = 0, ssl = true) {
+  constructor(rtt, throughput, serverLatency = 0, ssl = true) {
     this._warmed = false;
     this._ssl = ssl;
     this._rtt = rtt;
     this._throughput = throughput;
-    this._responseTime = responseTime;
+    this._serverLatency = serverLatency;
     this._congestionWindow = INITIAL_CONGESTION_WINDOW;
   }
 
@@ -92,14 +92,14 @@ class TcpConnection {
         oneWayLatency +
         // SYN ACK
         oneWayLatency +
-        // ACK + Application Data
+        // ACK + initial request
         oneWayLatency +
-        // ClientHello/ServerHello assuming TLS Flase Start is enabled (https://istlsfastyet.com/#server-performance).
+        // ClientHello/ServerHello assuming TLS False Start is enabled (https://istlsfastyet.com/#server-performance).
         (this._ssl ? twoWayLatency : 0);
     }
 
     let roundTrips = Math.ceil(handshakeAndRequest / twoWayLatency);
-    const timeToFirstByte = handshakeAndRequest + this._responseTime + oneWayLatency;
+    const timeToFirstByte = handshakeAndRequest + this._serverLatency + oneWayLatency;
     const timeElapsedForTTFB = Math.max(timeToFirstByte - timeAlreadyElapsed, 0);
     const maximumDownloadTimeToElapse = maximumTimeToElapse - timeElapsedForTTFB;
 
