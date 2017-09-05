@@ -16,7 +16,7 @@ const SCORING_POINT_OF_DIMINISHING_RETURNS = 1700;
 const SCORING_MEDIAN = 10000;
 
 // Any CPU task of 20 ms or more will end up being a critical long task on mobile
-const CRITICAL_LONG_TASK_THRESHOLD = 20000;
+const CRITICAL_LONG_TASK_THRESHOLD = 20;
 
 class PredictivePerf extends Audit {
   /**
@@ -66,9 +66,12 @@ class PredictivePerf extends Audit {
    * @return {!Node}
    */
   static getOptimisticTTCIGraph(graph) {
+    // Adjust the critical long task threshold for microseconds
+    const minimumCpuTaskDuration = CRITICAL_LONG_TASK_THRESHOLD * 1000;
+
     return graph.cloneWithRelationships(node => {
       // Include everything that might be a long task
-      if (node.type === Node.TYPES.CPU) return node.event.dur > CRITICAL_LONG_TASK_THRESHOLD;
+      if (node.type === Node.TYPES.CPU) return node.event.dur > minimumCpuTaskDuration;
       // Include all scripts and high priority requests
       return node.resourceType === 'script' ||
           node.record.priority() === 'High' ||

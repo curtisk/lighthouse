@@ -133,6 +133,7 @@ class PageDependencyGraphArtifact extends ComputedArtifact {
     }
 
     function addDependencyOnUrl(cpuNode, url) {
+      if (!url) return;
       const candidates = networkNodeOutput.urlToNodeMap.get(url) || [];
 
       let minCandidate = null;

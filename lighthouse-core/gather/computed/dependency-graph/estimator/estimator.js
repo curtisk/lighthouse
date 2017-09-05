@@ -163,9 +163,6 @@ class Estimator {
 
     // Try to add all its dependents to the queue
     for (const dependent of node.getDependents()) {
-      // Skip this node if it's already been completed
-      if (this._nodesCompleted.has(dependent)) continue;
-
       // Skip this node if one of its dependencies hasn't finished yet
       const dependencies = dependent.getDependencies();
       if (dependencies.some(dependency => !this._nodesCompleted.has(dependency))) continue;
